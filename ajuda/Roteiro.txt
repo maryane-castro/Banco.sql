@@ -1,0 +1,149 @@
+ROTEIRO
+
+CRIAR BACKUP DE bdpitaguary 
+
+$ pg_dump -d bdpitaguary -U pitaguary -F custom -f bdpitaguary.bckp
+
+CRIAR NOVO BANCO DE DADOS bdpitaguarynew
+
+bdpitaguary=# DROP DATABASE bdpitaguarynew;
+bdpitaguary=# CREATE DATABASE bdpitaguarynew;
+
+RESTAURAR BACKUP DE bdpitaguary NO bdpitaguaryNEW
+
+$ pg_restore -d bdpitaguarynew -U pitaguary bdpitaguary.bckp 
+
+ALTERAR O NOME DO TYPE continentes PARA continente
+
+bdpitaguarynew=# ALTER TYPE continentes RENAME TO continente;
+
+CRIAR AS NOVAS TABELAS
+
+bdpitaguarynew=# \i bdpitaguarynew.sql
+
+POPULAR TABELA DE CONTINENTES
+
+bdpitaguarynew=# \o continentes.sql
+bdpitaguarynew=# SELECT 'INSERT INTO continentes (continente) VALUES ('''|| continent ||''');'
+FROM country
+GROUP BY continent;
+bdpitaguarynew=# \o
+$ wc -l continentes.sql
+11 continentes.sql
+$ tail -n 9 continentes.sql | head -n 7 > continentes2.sql 
+
+bdpitaguarynew=# \i continentes2.sql
+
+POPULAR TABELA DE IDIOMAS
+
+bdpitaguarynew=# \o idiomas.sql
+bdpitaguarynew=# SELECT 'INSERT INTO idiomas (idioma) VALUES ('''|| language ||''');'
+FROM countrylanguage
+GROUP BY language;
+bdpitaguarynew=# \o
+
+$ wc -l idiomas.sql 
+461 idiomas.sql
+$ tail -n 459 idiomas.sql | head -n 457 > idiomas2.sql 
+
+bdpitaguarynew=# \i idiomas2.sql
+
+POPULAR TABELA DE FORMAS DE GOVERNO
+
+bdpitaguarynew=# \o formas_governo.sql
+bdpitaguarynew=# SELECT 'INSERT INTO formas_de_governo (forma_governo) VALUES ('''|| governmentform ||''');'
+FROM country
+GROUP BY governmentform;
+bdpitaguarynew=# \o
+
+$ wc -l formas_governo.sql
+39 formas_governo.sql
+$ tail -n 37 formas_governo.sql | head -n 35 > formas_governo2.sql 
+
+bdpitaguarynew=# \i formas_governo2.sql
+
+
+POPULAR TABELA DE PAÍSES
+
+bdpitaguarynew=# \o paises_nn.sql
+bdpitaguarynew=# SELECT 'INSERT INTO paises (pais, codigo, populacao, area, ano_independencia, id_continente, id_forma_governo) VALUES ('''|| TRIM(name) ||''', '''|| code ||''', '|| population ||', '|| surfacearea ||', '|| indepyear ||', '|| (SELECT id_continente FROM continentes WHERE continente = continent::TEXT) ||', '|| (SELECT id_forma_governo FROM formas_de_governo WHERE forma_governo = governmentform)||');'
+FROM country
+WHERE indepyear IS NOT NULL;
+bdpitaguarynew=# \o
+
+$ wc -l paises_nn.sql
+196 paises_nn.sql
+$ tail -n 194 paises_nn.sql | head -n 192 > paises_nn2.sql 
+
+bdpitaguarynew=# \i paises_nn2.sql
+
+bdpitaguarynew=# \o paises_n.sql
+bdpitaguarynew=# SELECT 'INSERT INTO paises (pais, codigo, populacao, area, id_continente, id_forma_governo) VALUES ('''|| TRIM(name) ||''', '''|| code ||''', '|| population ||', '|| surfacearea ||',  '|| (SELECT id_continente FROM continentes WHERE continente = continent::TEXT) ||', '|| (SELECT id_forma_governo FROM formas_de_governo WHERE forma_governo = governmentform)||');'
+FROM country
+WHERE indepyear IS NULL;
+bdpitaguarynew=# \o
+
+$ wc -l paises_n.sql
+51 paises_n.sql
+$ tail -n 49 paises_n.sql | head -n 47 > paises_n2.sql 
+
+bdpitaguarynew=# \i paises_n2.sql
+
+POPULAR TABELA DE ESTADOS
+
+bdpitaguarynew=# \o estados.sql
+bdpitaguarynew=# SELECT 'INSERT INTO estados (estado, id_pais) VALUES ('''|| district ||''', '|| (SELECT id_pais FROM paises WHERE codigo = countrycode) ||');'
+FROM city 
+GROUP BY district, countrycode;
+bdpitaguarynew=# \o
+
+$ wc -l estados.sql
+1416 estados.sql
+$ tail -n 1414 estados.sql | head -n 1412 > estados2.sql 
+
+bdpitaguarynew=# \i estados2.sql
+
+POPULAR TABELA DE CIDADES
+
+bdpitaguarynew=# \o cidades.sql
+bdpitaguarynew=# SELECT 'INSERT INTO cidades (cidade, populacao, id_estado) VALUES ('''|| name ||''', '|| population ||', '|| (SELECT id_estado FROM estados e INNER JOIN paises p ON (p.id_pais = e.id_pais) WHERE estado = district AND codigo = countrycode) ||');'
+FROM city;
+bdpitaguarynew=# \o
+
+$ wc -l cidades.sql 
+4083 cidades.sql
+$ tail -n 4081 cidades.sql | head -n 4079 > cidades2.sql 
+
+bdpitaguarynew=# \i cidades2.sql
+
+POPULAR TABELA DE IDIOMAS DOS PAISES
+
+bdpitaguarynew=# \o pais_idiomas.sql
+bdpitaguarynew=# SELECT 'INSERT INTO pais_idiomas (oficial, percentual, id_pais, id_idioma) VALUES ('''|| isofficial ||''', '|| percentage ||', '|| (SELECT id_pais FROM paises WHERE codigo = countrycode) ||', '|| (SELECT id_idioma FROM idiomas WHERE idioma = language) ||' );'
+FROM countrylanguage;
+bdpitaguarynew=# \o
+
+$ wc -l pais_idiomas.sql 
+988 pais_idiomas.sql
+$ tail -n 986 pais_idiomas.sql | head -n 984 > pais_idiomas2.sql 
+
+bdpitaguarynew=# \i pais_idiomas2.sql
+
+POPULAR TABELA DE CAPITAIS
+
+bdpitaguarynew=# \o capitais.sql
+bdpitaguarynew=# SELECT 'INSERT INTO capitais (id_pais, id_cidade) VALUES ('|| (SELECT id_pais FROM paises WHERE pais = co.name) ||', '|| (SELECT id_cidade FROM cidades c INNER JOIN estados e ON (e.id_estado = c.id_estado) INNER JOIN paises p ON (p.id_pais = e.id_pais) WHERE cidade = ci.name AND estado = district AND codigo = code)||');'
+FROM country co INNER JOIN
+     city ci ON (capital = id);
+bdpitaguarynew=# \o
+
+$ wc -l capitais.sql 
+236 capitais.sql
+$  tail -n 234 capitais.sql | head -n 232 > capitais2.sql 
+
+bdpitaguarynew=# \i capitais2.sql
+
+bdpitaguarynew=# DROP TABLE city;
+bdpitaguarynew=# DROP TABLE country;
+bdpitaguarynew=# DROP TABLE countrylanguage;
+
